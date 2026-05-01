@@ -6,10 +6,11 @@ import { executeDb } from '../db/index.js';
 import { execa } from 'execa';
 
 interface Props {
+  projectId: string;
   onDone: () => void;
 }
 
-export const CreateAgentForm: React.FC<Props> = ({ onDone }) => {
+export const CreateAgentForm: React.FC<Props> = ({ projectId, onDone }) => {
   const [step, setStep] = useState(0);
   const [name, setName] = useState('');
   const [role, setRole] = useState('');
@@ -73,8 +74,8 @@ export const CreateAgentForm: React.FC<Props> = ({ onDone }) => {
     try {
       await executeDb(
         'run',
-        'INSERT INTO Agents (id, name, role, provider, model) VALUES (?, ?, ?, ?, ?)',
-        [Date.now().toString(), name, role, provider, item.value]
+        'INSERT INTO Agents (id, project_id, name, role, provider, model) VALUES (?, ?, ?, ?, ?, ?)',
+        [Date.now().toString(), projectId, name, role, provider, item.value]
       );
     } catch (err) {
       console.error(err);

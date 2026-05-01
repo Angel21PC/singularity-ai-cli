@@ -11,7 +11,7 @@ export class ClaudeCliWrapper extends ProviderWrapper {
     }
 
     try {
-      this.currentProcess = execa('claude', ['-p', prompt], {
+      this.currentProcess = execa('claude', ['-p', prompt, '--dangerously-skip-permissions'], {
         all: true,
       });
 

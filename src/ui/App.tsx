@@ -6,26 +6,31 @@ import { executeDb } from '../db/index.js';
 import { CreateAgentForm } from './CreateAgentForm.js';
 import { GlobalChat } from './GlobalChat.js';
 import { StatusPanel } from './StatusPanel.js';
+import { ProjectSelect } from './ProjectSelect.js';
 
 export const App: React.FC = () => {
   const { exit } = useApp();
-  const [currentView, setCurrentView] = useState<'menu' | 'agents' | 'create_agent' | 'chat' | 'status'>('menu');
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
+  const [currentView, setCurrentView] = useState<'project_select' | 'menu' | 'agents' | 'create_agent' | 'chat' | 'status'>('project_select');
   const [agents, setAgents] = useState<any[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<any | null>(null);
 
   useEffect(() => {
-    if (currentView === 'agents') {
-      executeDb('all', 'SELECT * FROM Agents')
+    if (currentView === 'agents' && activeProjectId) {
+      executeDb('all', 'SELECT * FROM Agents WHERE project_id = ?', [activeProjectId])
         .then((data: any) => setAgents(data || []))
         .catch(console.error);
     }
-  }, [currentView]);
+  }, [currentView, activeProjectId]);
 
   useInput((input, key) => {
     if (key.escape) {
-      if (currentView !== 'menu') {
+      if (currentView !== 'project_select' && currentView !== 'menu') {
         setCurrentView('menu');
         setSelectedAgent(null); // Clear selected agent on back
+      } else if (currentView === 'menu') {
+        setCurrentView('project_select');
+        setActiveProjectId(null);
       }
     } else if (key.ctrl && input === 'c') {
       exit();
@@ -33,6 +38,11 @@ export const App: React.FC = () => {
   });
 
   const handleMenuSelect = (item: { value: string }) => {
+    if (item.value === 'switch_project') {
+      setCurrentView('project_select');
+      setActiveProjectId(null);
+      return;
+    }
     if (item.value === 'exit') {
       exit();
       return;
@@ -48,6 +58,7 @@ export const App: React.FC = () => {
           { label: '➕ Create Agent', value: 'create_agent' },
           { label: '💬 Global Chat', value: 'chat' },
           { label: '📊 Status & Limits', value: 'status' },
+          { label: '📂 Switch Project', value: 'switch_project' },
           { label: '❌ Exit', value: 'exit' }
         ]}
         onSelect={handleMenuSelect}
@@ -89,9 +100,9 @@ export const App: React.FC = () => {
 
     return (
       <Box flexDirection="column" padding={1}>
-        <Box marginBottom={1}><Text bold color="cyan">👀 Active Agents</Text></Box>
+        <Box marginBottom={1}><Text bold color="cyan">👀 Active Agents (Project)</Text></Box>
         {agents.length === 0 ? (
-          <Text color="gray">No agents found. Create one first!</Text>
+          <Text color="gray">No agents found in this project. Create one first!</Text>
         ) : (
           <SelectInput
             items={agents.map((a: any) => ({
@@ -115,6 +126,16 @@ export const App: React.FC = () => {
         <Text bold color="magenta">✨ Singularity AI CLI ✨</Text>
       </Box>
 
+      {currentView === 'project_select' && (
+        <ProjectSelect 
+          onSelectProject={(projectId) => {
+            setActiveProjectId(projectId);
+            setCurrentView('menu');
+          }}
+          onExit={exit}
+        />
+      )}
+
       {currentView === 'menu' && (
         <>
           <Text color="gray">Select an action:</Text>
@@ -125,8 +146,8 @@ export const App: React.FC = () => {
       )}
 
       {currentView === 'agents' && renderAgents()}
-      {currentView === 'create_agent' && <CreateAgentForm onDone={() => setCurrentView('menu')} />}
-      {currentView === 'chat' && <GlobalChat />}
+      {currentView === 'create_agent' && activeProjectId && <CreateAgentForm projectId={activeProjectId} onDone={() => setCurrentView('menu')} />}
+      {currentView === 'chat' && activeProjectId && <GlobalChat projectId={activeProjectId} />}
       {currentView === 'status' && <StatusPanel />}
     </Box>
   );

@@ -6,14 +6,18 @@ import { execa } from 'execa';
 import fs from 'fs';
 import path from 'path';
 
-export const GlobalChat: React.FC = () => {
+interface Props {
+  projectId: string;
+}
+
+export const GlobalChat: React.FC<Props> = ({ projectId }) => {
   const [input, setInput] = useState('');
   const [logs, setLogs] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [availableAgents, setAvailableAgents] = useState<any[]>([]);
 
   useEffect(() => {
-    executeDb('all', 'SELECT * FROM Agents')
+    executeDb('all', 'SELECT * FROM Agents WHERE project_id = ?', [projectId])
       .then((data: any) => setAvailableAgents(data || []))
       .catch(console.error);
       
@@ -22,7 +26,7 @@ export const GlobalChat: React.FC = () => {
     if (!fs.existsSync(dumpDir)) {
       fs.mkdirSync(dumpDir, { recursive: true });
     }
-  }, []);
+  }, [projectId]);
 
   const hintMatch = input.match(/@([a-zA-Z0-9_-]*)$/);
   let hints: string[] = [];
@@ -39,22 +43,24 @@ export const GlobalChat: React.FC = () => {
     let systemRole = "You are a helpful Orchestrator. When needed, delegate to other agents by outputting '@AgentName <task>'.";
 
     if (agentName !== 'Orchestrator') {
-      const result: any = await executeDb('get', 'SELECT * FROM Agents WHERE name = ? OR role LIKE ?', [agentName, `%${agentName}%`]);
+      const result: any = await executeDb('get', 'SELECT * FROM Agents WHERE (name = ? OR role LIKE ?) AND project_id = ?', [agentName, `%${agentName}%`, projectId]);
       if (result) {
         agentProvider = result.provider;
         agentModel = result.model;
         systemRole = `You are playing the role: ${result.role}.`;
         setLogs(prev => [...prev, `[System] Delegating task to agent: ${result.name} (${result.provider})`]);
       } else {
-        setLogs(prev => [...prev, `[System] Warning: Agent '${agentName}' not found. Executing task directly.`]);
+        setLogs(prev => [...prev, `[System] Warning: Agent '${agentName}' not found in this project. Executing task directly.`]);
       }
     }
 
-    const fullPrompt = `${systemRole}\nUser request: ${prompt}`;
+    const dumpPath = path.resolve(process.cwd(), `memory_dumps/${projectId}_latest_handoff.txt`);
+    const previousContext = fs.existsSync(dumpPath) ? `\nPrevious Handoff Context:\n${fs.readFileSync(dumpPath, 'utf8').substring(0, 1000)}\n` : '';
+    const fullPrompt = `${systemRole}${previousContext}\nUser request: ${prompt}`;
     let outputText = '';
     
     if (agentProvider === 'claude-code') {
-        const { stdout, stderr } = await execa('claude', ['-p', fullPrompt], { reject: false, input: '' });
+        const { stdout, stderr } = await execa('claude', ['-p', fullPrompt, '--permission-mode dontAsk'], { reject: false, input: '' });
         outputText = stdout || stderr || "No output";
     } else {
         const { stdout, stderr } = await execa('codex', ['exec', fullPrompt], { reject: false });
@@ -79,7 +85,7 @@ export const GlobalChat: React.FC = () => {
       let finalOutput = orchOutput;
 
       // Step 2 & 3: Check for delegation
-      const delegationMatch = orchOutput.match(/@(\w+)\s+(.*)/s);
+      const delegationMatch = orchOutput.match(/>>>DELEGATE @([A-Za-z0-9_]+)<<<[\s\S]*?\n([\s\S]*)/);
       
       if (delegationMatch) {
          const subAgentName = delegationMatch[1];
@@ -88,9 +94,11 @@ export const GlobalChat: React.FC = () => {
          // Step 4: Spawn subagent and get result
          const subOutput = await runAgent(subAgentName, subTask);
          
-         // Step 6: Write to memory_dumps/latest_handoff.txt
-         const dumpPath = path.resolve(process.cwd(), 'memory_dumps/latest_handoff.txt');
+         // Step 6: Write to memory_dumps/<project_id>_latest_handoff.txt
+         const dumpPath = path.resolve(process.cwd(), `memory_dumps/${projectId}_latest_handoff.txt`);
          fs.writeFileSync(dumpPath, subOutput, 'utf8');
+         const historyPath = path.resolve(process.cwd(), `memory_dumps/${projectId}_history.txt`);
+         fs.appendFileSync(historyPath, `\n\n[Delegated to @${subAgentName}]: ${subTask}\n[Result from @${subAgentName}]:\n${subOutput}\n`, 'utf8');
          
          setLogs(prev => [...prev, `[Orchestrator] Analyzing subagent result...`]);
          
@@ -112,7 +120,7 @@ export const GlobalChat: React.FC = () => {
 
   return (
     <Box flexDirection="column" padding={1}>
-      <Text bold color="cyan">💬 Global Chat & Orchestration</Text>
+      <Text bold color="cyan">💬 Global Chat & Orchestration (Project)</Text>
       <Text color="gray">Type your request and the Orchestrator will handle or delegate it.</Text>
       
       <Box flexDirection="column" marginTop={1} marginBottom={1} minHeight={10} borderStyle="single" borderColor="gray" padding={1}>
