@@ -1,0 +1,6 @@
+node_modules/
+dist/
+memory_dumps/
+*.sqlite
+*.sqlite-journal
+.env
