@@ -5,11 +5,12 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Initialize worker (pointing to worker.ts)
-const workerPath = path.resolve(__dirname, 'worker.ts');
-const worker = new Worker(workerPath, {
-  execArgv: ['--import', 'tsx'] // Make sure tsx is used for worker thread if needed
-});
+// Initialize worker (pointing to worker.js or worker.ts)
+const isTsNode = __filename.endsWith('.ts');
+const workerExtension = isTsNode ? 'ts' : 'js';
+const workerPath = path.resolve(__dirname, `worker.${workerExtension}`);
+const execArgv = isTsNode ? ['--import', 'tsx'] : [];
+const worker = new Worker(workerPath, { execArgv });
 
 let messageId = 0;
 const pendingRequests = new Map<number, { resolve: (val: any) => void; reject: (err: any) => void }>();

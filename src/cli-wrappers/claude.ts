@@ -1,9 +1,8 @@
 import { execa } from 'execa';
 import { ProviderWrapper } from './base.js';
-import type { ExecaChildProcess } from 'execa';
 
 export class ClaudeCliWrapper extends ProviderWrapper {
-  private currentProcess: ExecaChildProcess | null = null;
+  private currentProcess: any | null = null;
   private isPaused: boolean = false;
 
   async ask(prompt: string): Promise<string> {

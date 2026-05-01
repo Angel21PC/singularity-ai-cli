@@ -10,7 +10,7 @@ const __dirname = path.dirname(__filename);
 const dbPath = path.resolve(__dirname, '../../singularity.db');
 
 export function initDb() {
-  const db = new Database(dbPath, { verbose: console.log });
+  const db = new Database(dbPath);
   
   // Enable Write-Ahead Logging for better performance
   db.pragma('journal_mode = WAL');
