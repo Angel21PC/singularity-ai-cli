@@ -1,1 +1,2 @@
 node_modules/\ndist/\nmemory_dumps/\n*.sqlite\n*.sqlite-journal\n*.db\n*.db-shm\n*.db-wal\n.env
+node_modules/
