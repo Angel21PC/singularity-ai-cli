@@ -7,7 +7,7 @@ export abstract class ProviderWrapper {
   /**
    * Asks the provider a question or runs a command
    */
-  abstract ask(prompt: string): Promise<string>;
+  abstract ask(prompt: string, abortSignal?: AbortSignal): Promise<string>;
 
   /**
    * Check if paused

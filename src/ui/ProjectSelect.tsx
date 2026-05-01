@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Box, Text, useInput } from 'ink';
 import SelectInput from 'ink-select-input';
 import TextInput from 'ink-text-input';
-import { executeDb } from '../db/index.js';
+import { ProjectService } from '../services/ProjectService.js';
 import crypto from 'crypto';
 
 interface Props {
@@ -19,9 +19,11 @@ export const ProjectSelect: React.FC<Props> = ({ onSelectProject, onExit }) => {
 
   useEffect(() => {
     if (view === 'list') {
-      executeDb('all', 'SELECT * FROM Projects')
-        .then((data: any) => setProjects(data || []))
-        .catch(console.error);
+      try {
+        setProjects(ProjectService.getProjects());
+      } catch (err) {
+        console.error(err);
+      }
     }
   }, [view]);
 
@@ -48,14 +50,10 @@ export const ProjectSelect: React.FC<Props> = ({ onSelectProject, onExit }) => {
     if (newProjectName.trim()) setStep(1);
   };
 
-  const handleDescSubmit = async () => {
+  const handleDescSubmit = () => {
     const id = crypto.randomUUID();
     try {
-      await executeDb(
-        'run',
-        'INSERT INTO Projects (id, name, description) VALUES (?, ?, ?)',
-        [id, newProjectName, newProjectDesc]
-      );
+      ProjectService.createProject(id, newProjectName, newProjectDesc);
       setView('list');
       setStep(0);
       setNewProjectName('');

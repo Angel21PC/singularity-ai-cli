@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 import TextInput from 'ink-text-input';
-import { ClaudeCliWrapper } from '../cli-wrappers/claude.js';
+import { ProviderRegistry } from '../cli-wrappers/ProviderRegistry.js';
+import { Agent } from '../db/repositories/AgentRepository.js';
 
 interface Props {
-  agent: any;
+  agent: Agent;
   onBack: () => void;
 }
 
@@ -27,7 +28,7 @@ export const ChatAgent: React.FC<Props> = ({ agent, onBack }) => {
     try {
       const fullPrompt = `You are ${agent.name}. Your role is: ${agent.role}. Respond to this: ${prompt}`;
       
-      const wrapper = new ClaudeCliWrapper();
+      const wrapper = ProviderRegistry.getWrapper(agent.provider);
       const result = await wrapper.ask(fullPrompt);
       setResponse(result);
       setPrompt('');

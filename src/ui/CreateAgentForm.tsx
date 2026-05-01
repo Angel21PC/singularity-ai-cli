@@ -2,16 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
 import SelectInput from 'ink-select-input';
-import { executeDb } from '../db/index.js';
+import { AgentService } from '../services/AgentService.js';
 import { execa } from 'execa';
 import crypto from 'crypto';
 
 interface Props {
   projectId: string;
-  onDone: () => void;
+  onBack: () => void;
 }
 
-export const CreateAgentForm: React.FC<Props> = ({ projectId, onDone }) => {
+export const CreateAgentForm: React.FC<Props> = ({ projectId, onBack }) => {
   const [step, setStep] = useState(0);
   const [name, setName] = useState('');
   const [role, setRole] = useState('');
@@ -69,19 +69,22 @@ export const CreateAgentForm: React.FC<Props> = ({ projectId, onDone }) => {
     loadModels(item.value);
   };
 
-  const handleModelSelect = async (item: { value: string }) => {
+  const handleModelSelect = (item: { value: string }) => {
     setModel(item.value);
     setSaving(true);
     try {
-      await executeDb(
-        'run',
-        'INSERT INTO Agents (id, project_id, name, role, provider, model) VALUES (?, ?, ?, ?, ?, ?)',
-        [crypto.randomUUID(), projectId, name, role, provider, item.value]
-      );
+      AgentService.createAgent({
+        id: crypto.randomUUID(),
+        project_id: projectId,
+        name,
+        role,
+        provider,
+        model: item.value
+      });
     } catch (err) {
       console.error(err);
     } finally {
-      onDone();
+      onBack();
     }
   };
 

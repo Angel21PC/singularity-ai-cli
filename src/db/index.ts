@@ -1,41 +1,20 @@
-import { Worker } from 'worker_threads';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { getDb, initDb } from './init.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+export { getDb, initDb };
 
-// Initialize worker (pointing to worker.js or worker.ts)
-const isTsNode = __filename.endsWith('.ts');
-const workerExtension = isTsNode ? 'ts' : 'js';
-const workerPath = path.resolve(__dirname, `worker.${workerExtension}`);
-const execArgv = isTsNode ? ['--import', 'tsx'] : [];
-const worker = new Worker(workerPath, { execArgv });
-
-let messageId = 0;
-const pendingRequests = new Map<number, { resolve: (val: any) => void; reject: (err: any) => void }>();
-
-worker.on('message', (msg) => {
-  const { id, result, error } = msg;
-  const req = pendingRequests.get(id);
-  if (req) {
-    if (error) {
-      req.reject(new Error(error));
-    } else {
-      req.resolve(result);
+// Backwards compatibility layer
+export async function executeDb(type: 'run' | 'all' | 'get', sql: string, params: any[] = []): Promise<any> {
+  const db = getDb();
+  try {
+    const stmt = db.prepare(sql);
+    if (type === 'run') {
+      return stmt.run(params);
+    } else if (type === 'all') {
+      return stmt.all(params);
+    } else if (type === 'get') {
+      return stmt.get(params);
     }
-    pendingRequests.delete(id);
+  } catch (err) {
+    throw err;
   }
-});
-
-worker.on('error', (err) => {
-  console.error('Database worker error:', err);
-});
-
-export function executeDb(type: 'run' | 'all' | 'get', sql: string, params: any[] = []): Promise<any> {
-  return new Promise((resolve, reject) => {
-    const id = messageId++;
-    pendingRequests.set(id, { resolve, reject });
-    worker.postMessage({ id, type, sql, params });
-  });
 }

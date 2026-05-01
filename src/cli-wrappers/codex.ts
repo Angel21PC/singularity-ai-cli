@@ -1,46 +1,46 @@
 import { execa } from 'execa';
 import { ProviderWrapper } from './base.js';
 import { RateLimitError } from './errors.js';
+import { parseRateLimit } from './rateLimitParser.js';
 
 export class CodexCliWrapper extends ProviderWrapper {
-  async ask(prompt: string): Promise<string> {
+  async ask(prompt: string, abortSignal?: AbortSignal): Promise<string> {
     this.checkPaused();
 
-    try {
-      const process = execa('codex', ['exec', prompt], { reject: false });
-      const { stdout, stderr } = await process;
-      const output = stdout || stderr || '';
-      
-      this.checkRateLimit(output);
+    const controller = new AbortController();
+    if (abortSignal) {
+      abortSignal.addEventListener('abort', () => controller.abort());
+    }
 
+    try {
+      const process = execa('codex', ['-p', prompt], {
+        all: true,
+        reject: false,
+        timeout: 5 * 60 * 1000,
+        signal: controller.signal
+      });
+
+      const { all } = await process;
+      const output = all || '';
+      
+      this.handleRateLimitOrThrow(output);
       return output;
-    } catch (error: unknown) {
+    } catch (error: any) {
       if (error instanceof RateLimitError) throw error;
-      const err = error as { stdout?: string; stderr?: string; message?: string };
-      const output = err.stdout || err.stderr || err.message || '';
-      this.checkRateLimit(output);
+      if (error.name === 'AbortError') throw new Error('Task was aborted');
+      
+      const output = error.all || error.message || '';
+      this.handleRateLimitOrThrow(output);
+      
       throw error;
     }
   }
 
-  private checkRateLimit(output: string) {
-    const limitRegex = /limit reached.*?try again at (\d{1,2}):(\d{2})/i;
-    const match = output.match(limitRegex);
-    if (match) {
-        const [_, hours, minutes] = match;
-        const now = new Date();
-        const targetTime = new Date(now);
-        targetTime.setHours(parseInt(hours, 10), parseInt(minutes, 10), 0, 0);
-        
-        let waitMs = targetTime.getTime() - now.getTime();
-        if (waitMs < 0) {
-            waitMs += 24 * 60 * 60 * 1000;
-        }
-        this.pause(waitMs);
-        throw new RateLimitError(waitMs, `Rate limit reached. Try again at ${hours}:${minutes}`);
-    } else if (output.toLowerCase().includes('rate limit') || output.toLowerCase().includes('limit reached')) {
-        this.pause(5 * 60 * 1000);
-        throw new RateLimitError(5 * 60 * 1000, 'Rate limit detected without specific time.');
+  private handleRateLimitOrThrow(output: string) {
+    const waitMs = parseRateLimit(output);
+    if (waitMs !== null) {
+      this.pause(waitMs);
+      throw new RateLimitError(waitMs, 'Rate limit hit. Pausing provider execution.');
     }
   }
 }

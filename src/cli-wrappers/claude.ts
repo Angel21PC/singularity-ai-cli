@@ -1,52 +1,63 @@
 import { execa } from 'execa';
 import { ProviderWrapper } from './base.js';
 import { RateLimitError } from './errors.js';
+import { parseRateLimit } from './rateLimitParser.js';
 
 export class ClaudeCliWrapper extends ProviderWrapper {
-  async ask(prompt: string): Promise<string> {
+  async ask(prompt: string, abortSignal?: AbortSignal): Promise<string> {
     this.checkPaused();
+
+    const controller = new AbortController();
+    if (abortSignal) {
+      abortSignal.addEventListener('abort', () => controller.abort());
+    }
 
     try {
       const process = execa('claude', ['-p', prompt, '--permission-mode', 'dontAsk'], {
-        all: true, reject: false
+        all: true,
+        reject: false,
+        timeout: 5 * 60 * 1000, // 5 minutes
+        signal: controller.signal
       });
 
       const { all } = await process;
-
       const output = all || '';
       
-      this.checkRateLimit(output);
-
+      this.handleRateLimitOrThrow(output);
       return output;
-    } catch (error: unknown) {
+    } catch (error: any) {
       if (error instanceof RateLimitError) throw error;
-      const err = error as { all?: string; message?: string };
-      const output = err.all || err.message || '';
+      if (error.name === 'AbortError') throw new Error('Task was aborted');
       
-      this.checkRateLimit(output);
+      const output = error.all || error.message || '';
+      this.handleRateLimitOrThrow(output);
       
       throw error;
     }
   }
 
-  private checkRateLimit(output: string) {
+  private handleRateLimitOrThrow(output: string) {
+    // Custom check for claude specific output "try again at HH:MM"
     const limitRegex = /limit reached.*?try again at (\d{1,2}):(\d{2})/i;
     const match = output.match(limitRegex);
     if (match) {
-        const [_, hours, minutes] = match;
+        const [, hours, minutes] = match;
         const now = new Date();
         const targetTime = new Date(now);
         targetTime.setHours(parseInt(hours, 10), parseInt(minutes, 10), 0, 0);
         
         let waitMs = targetTime.getTime() - now.getTime();
-        if (waitMs < 0) {
-            waitMs += 24 * 60 * 60 * 1000;
-        }
+        if (waitMs < 0) waitMs += 24 * 60 * 60 * 1000;
+        
         this.pause(waitMs);
         throw new RateLimitError(waitMs, `Rate limit reached. Try again at ${hours}:${minutes}`);
-    } else if (output.toLowerCase().includes('rate limit') || output.toLowerCase().includes('limit reached') || output.includes('429')) {
-        this.pause(5 * 60 * 1000);
-        throw new RateLimitError(5 * 60 * 1000, 'Rate limit hit. Pausing provider execution.');
+    }
+    
+    // Generic check
+    const waitMs = parseRateLimit(output);
+    if (waitMs !== null) {
+      this.pause(waitMs);
+      throw new RateLimitError(waitMs, 'Rate limit hit. Pausing provider execution.');
     }
   }
 }
