@@ -13,11 +13,11 @@ export class CodexCliWrapper extends ProviderWrapper {
     }
 
     try {
-      const process = execa('codex', ['-p', prompt], {
+      const process = execa('codex', ['exec', prompt], {
         all: true,
         reject: false,
         timeout: 5 * 60 * 1000,
-        signal: controller.signal
+        cancelSignal: controller.signal
       });
 
       const { all } = await process;

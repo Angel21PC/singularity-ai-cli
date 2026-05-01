@@ -60,7 +60,7 @@ export const GlobalChat: React.FC<Props> = ({ projectId }) => {
   if (hintMatch) {
     const partial = hintMatch[1].toLowerCase();
     hints = availableAgents
-      .filter((a: any) => a.name.toLowerCase().includes(partial) || a.role.toLowerCase().includes(partial) || a.name.replace(/\s+/g, '').toLowerCase().includes(partial))
+      .filter((a: any) => (a.name && a.name.toLowerCase().includes(partial)) || (a.role && a.role.toLowerCase().includes(partial)) || (a.name && a.name.replace(/\s+/g, '').toLowerCase().includes(partial)))
       .map((a: any) => `@${a.name.replace(/\s+/g, '')} (${a.provider})`);
   }
 

@@ -10,8 +10,8 @@ import crypto from 'crypto';
 export class Orchestrator {
   static async runAgent(projectId: string, agentName: string, prompt: string, rootTaskId?: string): Promise<string> {
     const taskId = crypto.randomUUID();
-    let agentProvider = 'claude-code';
-    let agentId = 'orchestrator';
+    let agentProvider = 'codex';
+    let agentId: string | null = null;
     let systemRole = "You are a helpful Orchestrator. When needed, delegate to other agents by outputting '>>>DELEGATE @AgentName<<<\n<task>'.";
 
     if (agentName !== 'Orchestrator') {
