@@ -1,0 +1,40 @@
+import { Worker } from 'worker_threads';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Initialize worker (pointing to worker.ts)
+const workerPath = path.resolve(__dirname, 'worker.ts');
+const worker = new Worker(workerPath, {
+  execArgv: ['--import', 'tsx'] // Make sure tsx is used for worker thread if needed
+});
+
+let messageId = 0;
+const pendingRequests = new Map<number, { resolve: (val: any) => void; reject: (err: any) => void }>();
+
+worker.on('message', (msg) => {
+  const { id, result, error } = msg;
+  const req = pendingRequests.get(id);
+  if (req) {
+    if (error) {
+      req.reject(new Error(error));
+    } else {
+      req.resolve(result);
+    }
+    pendingRequests.delete(id);
+  }
+});
+
+worker.on('error', (err) => {
+  console.error('Database worker error:', err);
+});
+
+export function executeDb(type: 'run' | 'all' | 'get', sql: string, params: any[] = []): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const id = messageId++;
+    pendingRequests.set(id, { resolve, reject });
+    worker.postMessage({ id, type, sql, params });
+  });
+}
