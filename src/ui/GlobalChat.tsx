@@ -3,6 +3,8 @@ import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
 import { executeDb } from '../db/index.js';
 import { execa } from 'execa';
+import fs from 'fs';
+import path from 'path';
 
 export const GlobalChat: React.FC = () => {
   const [input, setInput] = useState('');
@@ -14,6 +16,12 @@ export const GlobalChat: React.FC = () => {
     executeDb('all', 'SELECT * FROM Agents')
       .then((data: any) => setAvailableAgents(data || []))
       .catch(console.error);
+      
+    // Ensure memory_dumps directory exists
+    const dumpDir = path.resolve(process.cwd(), 'memory_dumps');
+    if (!fs.existsSync(dumpDir)) {
+      fs.mkdirSync(dumpDir, { recursive: true });
+    }
   }, []);
 
   const hintMatch = input.match(/@([a-zA-Z0-9_-]*)$/);
@@ -25,6 +33,36 @@ export const GlobalChat: React.FC = () => {
       .map((a: any) => `@${a.name.replace(/\s+/g, '')} (${a.provider})`);
   }
 
+  const runAgent = async (agentName: string, prompt: string): Promise<string> => {
+    let agentProvider = 'claude-code';
+    let agentModel = 'claude-3-5-sonnet-20241022';
+    let systemRole = "You are a helpful Orchestrator. When needed, delegate to other agents by outputting '@AgentName <task>'.";
+
+    if (agentName !== 'Orchestrator') {
+      const result: any = await executeDb('get', 'SELECT * FROM Agents WHERE name = ? OR role LIKE ?', [agentName, `%${agentName}%`]);
+      if (result) {
+        agentProvider = result.provider;
+        agentModel = result.model;
+        systemRole = `You are playing the role: ${result.role}.`;
+        setLogs(prev => [...prev, `[System] Delegating task to agent: ${result.name} (${result.provider})`]);
+      } else {
+        setLogs(prev => [...prev, `[System] Warning: Agent '${agentName}' not found. Executing task directly.`]);
+      }
+    }
+
+    const fullPrompt = `${systemRole}\nUser request: ${prompt}`;
+    let outputText = '';
+    
+    if (agentProvider === 'claude-code') {
+        const { stdout, stderr } = await execa('claude', ['-p', fullPrompt], { reject: false, input: '' });
+        outputText = stdout || stderr || "No output";
+    } else {
+        const { stdout, stderr } = await execa('codex', ['exec', fullPrompt], { reject: false });
+        outputText = stdout || stderr || "No output";
+    }
+    return outputText;
+  };
+
   const handleSubmit = async () => {
     if (!input.trim() || isProcessing) return;
     
@@ -34,49 +72,36 @@ export const GlobalChat: React.FC = () => {
     setIsProcessing(true);
 
     try {
-      // 1. Detectar mención (Orquestador / Delegación)
-      const mentionMatch = command.match(/@(\w+)/);
-      let agentName = null;
-      if (mentionMatch) {
-         agentName = mentionMatch[1];
-      }
-
-      // 2. Cargar datos del agente de la BBDD
-      let agentProvider = 'claude-code';
-      let agentModel = 'claude-3-5-sonnet-20241022';
-      let systemRole = "You are a helpful assistant.";
-
-      if (agentName) {
-        const result: any = await executeDb('get', 'SELECT * FROM Agents WHERE name = ? OR role LIKE ?', [agentName, `%${agentName}%`]);
-        if (result) {
-          agentProvider = result.provider;
-          agentModel = result.model;
-          systemRole = `You are playing the role: ${result.role}.`;
-          setLogs(prev => [...prev, `[System] Delegating task to agent: ${result.name} (${result.provider})`]);
-        } else {
-          setLogs(prev => [...prev, `[System] Warning: Agent '${agentName}' not found. Using default Orchestrator.`]);
-        }
-      }
-
-      // 3. Ejecutar comando al CLI
-      const fullPrompt = `${systemRole}\nUser request: ${command}`;
+      setLogs(prev => [...prev, `[Orchestrator] Analyzing request...`]);
       
-      let outputText = '';
-      if (agentProvider === 'claude-code') {
-          const { stdout, stderr } = await execa('claude', ['-p', fullPrompt], { reject: false, input: '' });
-          if (stderr && stderr.includes('limit')) {
-             // Fake parser for limit demo
-             outputText = `[Rate Limit] Caught limit. Will retry later.`;
-          } else {
-             outputText = stdout || stderr || "No output";
-          }
-      } else {
-          // Codex execution
-          const { stdout, stderr } = await execa('codex', ['exec', fullPrompt], { reject: false });
-          outputText = stdout || stderr || "No output";
+      // Step 1: Send to Orchestrator
+      const orchOutput = await runAgent('Orchestrator', command);
+      let finalOutput = orchOutput;
+
+      // Step 2 & 3: Check for delegation
+      const delegationMatch = orchOutput.match(/@(\w+)\s+(.*)/s);
+      
+      if (delegationMatch) {
+         const subAgentName = delegationMatch[1];
+         const subTask = delegationMatch[2];
+         
+         // Step 4: Spawn subagent and get result
+         const subOutput = await runAgent(subAgentName, subTask);
+         
+         // Step 6: Write to memory_dumps/latest_handoff.txt
+         const dumpPath = path.resolve(process.cwd(), 'memory_dumps/latest_handoff.txt');
+         fs.writeFileSync(dumpPath, subOutput, 'utf8');
+         
+         setLogs(prev => [...prev, `[Orchestrator] Analyzing subagent result...`]);
+         
+         // Step 4 (Feedback): Feed back to Orchestrator
+         const feedbackPrompt = `The subagent @${subAgentName} executed your delegation. Its full output is saved at ${dumpPath}.\nHere is a snippet: ${subOutput.substring(0, 500)}\n\nPlease provide the final response to the user based on this result.`;
+         finalOutput = await runAgent('Orchestrator', feedbackPrompt);
       }
 
-      setLogs(prev => [...prev, `[Agent] ${outputText.substring(0, 300)}${outputText.length > 300 ? '...' : ''}`]);
+      // Step 5: Truncate final agent output to 200 chars for the UI
+      const truncatedFinal = finalOutput.length > 200 ? finalOutput.substring(0, 200) + '...' : finalOutput;
+      setLogs(prev => [...prev, `[Agent] ${truncatedFinal}`]);
 
     } catch (err: any) {
       setLogs(prev => [...prev, `[Error] ${err.message}`]);
@@ -88,12 +113,12 @@ export const GlobalChat: React.FC = () => {
   return (
     <Box flexDirection="column" padding={1}>
       <Text bold color="cyan">💬 Global Chat & Orchestration</Text>
-      <Text color="gray">Type '@AgentName' to delegate a task directly.</Text>
+      <Text color="gray">Type your request and the Orchestrator will handle or delegate it.</Text>
       
       <Box flexDirection="column" marginTop={1} marginBottom={1} minHeight={10} borderStyle="single" borderColor="gray" padding={1}>
-        {logs.length === 0 ? <Text color="gray">No messages yet. Try: @Frontend write a react button.</Text> : null}
+        {logs.length === 0 ? <Text color="gray">No messages yet. Try: create a react button.</Text> : null}
         {logs.map((log, i) => (
-          <Text key={i} color={log.startsWith('>') ? 'white' : log.startsWith('[Error]') ? 'red' : log.startsWith('[System]') ? 'yellow' : 'green'}>
+          <Text key={i} color={log.startsWith('>') ? 'white' : log.startsWith('[Error]') ? 'red' : log.startsWith('[System]') ? 'yellow' : log.startsWith('[Orchestrator]') ? 'magenta' : 'green'}>
             {log}
           </Text>
         ))}
