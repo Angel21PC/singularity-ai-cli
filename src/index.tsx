@@ -7,6 +7,8 @@ import { execa } from 'execa';
 import { scheduler } from './core/Scheduler.js';
 import { Orchestrator } from './core/Orchestrator.js';
 import { eventBus } from './core/EventBus.js';
+import crypto from 'crypto';
+import { z } from 'zod';
 
 async function checkBinaries() {
   try {
@@ -46,13 +48,22 @@ async function main() {
       process.exit(1);
     }
     
-    const projectId = args[projectIndex + 1];
-    const prompt = args[promptIndex + 1];
-    
-    if (!projectId || !prompt) {
-       console.error("Missing values for --project or --prompt");
-       process.exit(1);
+    const HeadlessArgs = z.object({
+      projectId: z.string().min(1, '--project value cannot be empty'),
+      prompt: z.string().min(1, '--prompt value cannot be empty'),
+    });
+
+    const parsed = HeadlessArgs.safeParse({
+      projectId: args[projectIndex + 1],
+      prompt: args[promptIndex + 1],
+    });
+
+    if (!parsed.success) {
+      console.error('Invalid arguments:', parsed.error.issues.map(i => i.message).join(', '));
+      process.exit(1);
     }
+
+    const { projectId, prompt } = parsed.data;
 
     console.log(`Running in headless mode. Project: ${projectId}, Prompt: "${prompt}"`);
     
@@ -73,7 +84,6 @@ async function main() {
       }
     });
 
-    const crypto = require('crypto');
     Orchestrator.handlePrompt(projectId, prompt, crypto.randomUUID()).catch((err) => {
       console.error(err);
       process.exit(1);

@@ -37,7 +37,7 @@ export const App: React.FC = () => {
     { label: '❌ Exit', value: 'exit' },
   ];
 
-  const handleSelect = (item: any) => {
+  const handleSelect = (item: { label: string; value: string }) => {
     if (item.value === 'create_agent') {
       setActiveView('create_agent');
     } else if (item.value === 'global_chat') {

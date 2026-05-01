@@ -4,6 +4,7 @@ import TextInput from 'ink-text-input';
 import { AgentService } from '../services/AgentService.js';
 import { Orchestrator } from '../core/Orchestrator.js';
 import { eventBus, OrchestratorEvent } from '../core/EventBus.js';
+import { Agent } from '../db/repositories/AgentRepository.js';
 import crypto from 'crypto';
 
 interface Props {
@@ -14,7 +15,7 @@ export const GlobalChat: React.FC<Props> = ({ projectId }) => {
   const [input, setInput] = useState('');
   const [logs, setLogs] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [availableAgents, setAvailableAgents] = useState<any[]>([]);
+  const [availableAgents, setAvailableAgents] = useState<Agent[]>([]);
   const currentTaskIdRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -60,8 +61,8 @@ export const GlobalChat: React.FC<Props> = ({ projectId }) => {
   if (hintMatch) {
     const partial = hintMatch[1].toLowerCase();
     hints = availableAgents
-      .filter((a: any) => (a.name && a.name.toLowerCase().includes(partial)) || (a.role && a.role.toLowerCase().includes(partial)) || (a.name && a.name.replace(/\s+/g, '').toLowerCase().includes(partial)))
-      .map((a: any) => `@${a.name.replace(/\s+/g, '')} (${a.provider})`);
+      .filter(a => a.name.toLowerCase().includes(partial) || a.role.toLowerCase().includes(partial) || a.name.replace(/\s+/g, '').toLowerCase().includes(partial))
+      .map(a => `@${a.name.replace(/\s+/g, '')} (${a.provider})`);
   }
 
   const handleSubmit = async () => {

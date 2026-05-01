@@ -16,22 +16,24 @@ export class ClaudeCliWrapper extends ProviderWrapper {
       const process = execa('claude', ['-p', prompt, '--permission-mode', 'dontAsk'], {
         all: true,
         reject: false,
-        timeout: 5 * 60 * 1000, // 5 minutes
+        timeout: 5 * 60 * 1000,
         cancelSignal: controller.signal
       });
 
       const { all } = await process;
       const output = all || '';
-      
+
       this.handleRateLimitOrThrow(output);
       return output;
-    } catch (error: any) {
+    } catch (error) {
       if (error instanceof RateLimitError) throw error;
-      if (error.name === 'AbortError') throw new Error('Task was aborted');
-      
-      const output = error.all || error.message || '';
+
+      const execaError = error as { name?: string; all?: string; message?: string };
+      if (execaError.name === 'AbortError') throw new Error('Task was aborted');
+
+      const output = execaError.all ?? execaError.message ?? '';
       this.handleRateLimitOrThrow(output);
-      
+
       throw error;
     }
   }

@@ -14,7 +14,7 @@ export interface OrchestratorEvent {
   type: OrchestratorEventType;
   projectId: string;
   taskId?: string;
-  payload: any;
+  payload: string;
 }
 
 class OrchestratorEventBus extends EventEmitter {
