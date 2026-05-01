@@ -13,6 +13,7 @@ export const CreateAgentForm: React.FC<Props> = ({ onDone }) => {
   const [name, setName] = useState('');
   const [role, setRole] = useState('');
   const [provider, setProvider] = useState('claude-code');
+  const [model, setModel] = useState('');
   const [saving, setSaving] = useState(false);
 
   const handleNameSubmit = () => {
@@ -23,14 +24,19 @@ export const CreateAgentForm: React.FC<Props> = ({ onDone }) => {
     if (role.trim()) setStep(2);
   };
 
-  const handleProviderSubmit = async (item: { value: string }) => {
+  const handleProviderSubmit = (item: { value: string }) => {
     setProvider(item.value);
+    setStep(3);
+  };
+
+  const handleModelSubmit = async () => {
+    if (!model.trim()) return;
     setSaving(true);
     try {
       await executeDb(
         'run',
-        'INSERT INTO Agents (name, role, provider) VALUES (?, ?, ?)',
-        [name, role, item.value]
+        'INSERT INTO Agents (id, name, role, provider, model) VALUES (?, ?, ?, ?, ?)',
+        [Date.now().toString(), name, role, provider, model]
       );
     } catch (err) {
       console.error(err);
@@ -75,15 +81,31 @@ export const CreateAgentForm: React.FC<Props> = ({ onDone }) => {
         </Box>
       )}
 
-      {step >= 2 && !saving && (
+      {step >= 2 && (
         <Box flexDirection="column" marginBottom={1}>
           <Box marginBottom={1}><Text color="green">Select Provider: </Text></Box>
-          <SelectInput
-            items={[
-              { label: 'Claude Code', value: 'claude-code' },
-              { label: 'OpenAI Codex', value: 'codex' }
-            ]}
-            onSelect={handleProviderSubmit}
+          {step === 2 ? (
+            <SelectInput
+              items={[
+                { label: 'Claude Code', value: 'claude-code' },
+                { label: 'OpenAI Codex', value: 'codex' }
+              ]}
+              onSelect={handleProviderSubmit}
+            />
+          ) : (
+            <Text>{provider}</Text>
+          )}
+        </Box>
+      )}
+
+      {step >= 3 && !saving && (
+        <Box marginBottom={1}>
+          <Text color="green">Model String: </Text>
+          <TextInput
+            value={model}
+            onChange={setModel}
+            onSubmit={handleModelSubmit}
+            placeholder="e.g., claude-3-sonnet, gpt-4o"
           />
         </Box>
       )}
