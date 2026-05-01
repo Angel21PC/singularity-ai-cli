@@ -2,6 +2,7 @@ import { eventBus } from './EventBus.js';
 import { AgentRepository } from '../db/repositories/AgentRepository.js';
 import { TaskQueueRepository } from '../db/repositories/TaskQueueRepository.js';
 import { ProviderRegistry } from '../cli-wrappers/ProviderRegistry.js';
+import { RateLimitError } from '../cli-wrappers/errors.js';
 import { MemoryStore } from '../services/MemoryStore.js';
 import { parseDelegation } from './OrchestratorUtils.js';
 import { logger } from './Logger.js';
@@ -10,7 +11,7 @@ import crypto from 'crypto';
 export class Orchestrator {
   static async runAgent(projectId: string, agentName: string, prompt: string, rootTaskId?: string): Promise<string> {
     const taskId = crypto.randomUUID();
-    let agentProvider = 'codex';
+    let agentProvider = 'claude-code';
     let agentId: string = 'orchestrator';
     let systemRole = "You are a helpful Orchestrator. When needed, delegate to other agents by outputting '>>>DELEGATE @AgentName<<<\n<task>'.";
 
@@ -44,13 +45,14 @@ export class Orchestrator {
       MemoryStore.saveTaskResult(projectId, taskId, outputText);
       TaskQueueRepository.updateTaskStatus(taskId, 'COMPLETED', outputText);
       return outputText;
-    } catch (err: any) {
-      if (err.name === 'RateLimitError') {
+    } catch (err) {
+      if (err instanceof RateLimitError) {
         const resumeAt = new Date(Date.now() + err.waitMs).toISOString();
         TaskQueueRepository.updateTaskStatus(taskId, 'SLEEPING', undefined, resumeAt);
         throw err;
       } else {
-        TaskQueueRepository.updateTaskStatus(taskId, 'FAILED', err.message);
+        const message = err instanceof Error ? err.message : String(err);
+        TaskQueueRepository.updateTaskStatus(taskId, 'FAILED', message);
         throw err;
       }
     }
@@ -82,12 +84,13 @@ export class Orchestrator {
 
       eventBus.emitEvent({ type: 'TaskCompleted', projectId, taskId: rootTaskId, payload: finalOutput });
 
-    } catch (err: any) {
+    } catch (err) {
       logger.error({ err, projectId }, 'Task failed');
-      if (err.name === 'RateLimitError') {
+      if (err instanceof RateLimitError) {
         eventBus.emitEvent({ type: 'RateLimited', projectId, taskId: rootTaskId, payload: 'Agent paused. Task queued for later.' });
       } else {
-        eventBus.emitEvent({ type: 'TaskFailed', projectId, taskId: rootTaskId, payload: err.message });
+        const message = err instanceof Error ? err.message : String(err);
+        eventBus.emitEvent({ type: 'TaskFailed', projectId, taskId: rootTaskId, payload: message });
       }
     }
   }
