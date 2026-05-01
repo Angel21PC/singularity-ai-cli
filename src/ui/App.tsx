@@ -3,13 +3,17 @@ import { Box, Text, useApp } from 'ink';
 import SelectInput from 'ink-select-input';
 import { executeDb } from '../db/index.js';
 import { CreateAgentForm } from './CreateAgentForm.js';
+import { GlobalChat } from './GlobalChat.js';
+import { StatusPanel } from './StatusPanel.js';
+import { ChatAgent } from './ChatAgent.js';
 
-type View = 'menu' | 'view_agents' | 'create_agent' | 'status';
+type View = 'menu' | 'view_agents' | 'create_agent' | 'status' | 'chat_select' | 'chat';
 
 export const App = () => {
   const { exit } = useApp();
   const [currentView, setCurrentView] = useState<View>('menu');
   const [agents, setAgents] = useState<any[]>([]);
+  const [selectedAgent, setSelectedAgent] = useState<any>(null);
 
   const fetchAgents = async () => {
     try {
@@ -21,7 +25,7 @@ export const App = () => {
   };
 
   useEffect(() => {
-    if (currentView === 'view_agents') {
+    if (currentView === 'view_agents' || currentView === 'chat_select') {
       fetchAgents();
     }
   }, [currentView]);
@@ -34,6 +38,18 @@ export const App = () => {
     }
   };
 
+  const handleAgentSelectForChat = (item: { value: string }) => {
+    if (item.value === 'back') {
+      setCurrentView('menu');
+      return;
+    }
+    const agent = agents.find((a) => a.id.toString() === item.value);
+    if (agent) {
+      setSelectedAgent(agent);
+      setCurrentView('chat');
+    }
+  };
+
   const renderViewAgents = () => (
     <Box flexDirection="column" padding={1}>
       <Box marginBottom={1}><Text bold color="cyan">🤖 Agents List</Text></Box>
@@ -43,7 +59,7 @@ export const App = () => {
         agents.map((agent: any) => (
           <Box key={agent.id} marginBottom={1}>
             <Text bold color="green">{agent.name} </Text>
-            <Text color="yellow">[{agent.provider}] </Text>
+            <Text color="yellow">[{agent.provider}{agent.model ? ` | ${agent.model}` : ''}] </Text>
             <Text color="white">- {agent.role}</Text>
           </Box>
         ))
@@ -72,6 +88,33 @@ export const App = () => {
     </Box>
   );
 
+  const renderChatSelect = () => {
+    const items = agents.map((agent) => ({
+      label: agent.name,
+      value: agent.id.toString(),
+    }));
+    items.push({ label: 'Back to Menu', value: 'back' });
+
+    return (
+      <Box flexDirection="column" padding={1}>
+        <Box marginBottom={1}><Text bold color="cyan">💬 Select Agent to Chat</Text></Box>
+        {agents.length === 0 ? (
+          <Text color="gray">No agents found. Create one first!</Text>
+        ) : (
+          <SelectInput items={items} onSelect={handleAgentSelectForChat} />
+        )}
+        {agents.length === 0 && (
+          <Box marginTop={1}>
+            <SelectInput
+              items={[{ label: 'Back to Menu', value: 'back' }]}
+              onSelect={() => setCurrentView('menu')}
+            />
+          </Box>
+        )}
+      </Box>
+    );
+  };
+
   return (
     <Box flexDirection="column" borderStyle="round" borderColor="magenta" padding={1} width={80}>
       <Box justifyContent="center" marginBottom={1}>
@@ -87,8 +130,11 @@ export const App = () => {
             items={[
               { label: '👀 View Agents', value: 'view_agents' },
               { label: '➕ Create Agent', value: 'create_agent' },
+              { label: '💬 Chat with Agent', value: 'chat_select' },
               { label: '📊 Status/Providers', value: 'status' },
-              { label: '❌ Exit', value: 'exit' }
+              { label: '💬 Global Chat', value: 'chat' },
+        { label: '📊 Status { label: '❌ Exit', value: 'exit' } Limits', value: 'status' },
+        { label: '❌ Exit', value: 'exit' }
             ]}
             onSelect={handleSelect}
           />
@@ -99,6 +145,12 @@ export const App = () => {
       
       {currentView === 'create_agent' && (
         <CreateAgentForm onDone={() => setCurrentView('menu')} />
+      )}
+
+      {currentView === 'chat_select' && renderChatSelect()}
+
+      {currentView === 'chat' && selectedAgent && (
+        <ChatAgent agent={selectedAgent} onBack={() => setCurrentView('menu')} />
       )}
 
       {currentView === 'status' && renderStatus()}
