@@ -14,6 +14,7 @@ export function initDb() {
   
   const db = new Database('singularity.sqlite');
   db.pragma('journal_mode = WAL');
+  db.pragma('foreign_keys = ON');
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS Projects (
@@ -42,9 +43,7 @@ export function initDb() {
       resume_at DATETIME,
       result TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY(agent_id) REFERENCES Agents(id),
-      FOREIGN KEY(project_id) REFERENCES Projects(id)
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
     CREATE TABLE IF NOT EXISTS ProviderState (
@@ -69,6 +68,11 @@ export function initDb() {
   } catch (e) {
     // non-fatal
   }
+
+  // Insert dummy orchestrator agent to satisfy logic if needed
+  try {
+      db.prepare("INSERT OR IGNORE INTO Agents (id, project_id, name, role, provider, model) VALUES ('orchestrator', 'global', 'Orchestrator', 'System', 'codex', 'gpt-4o')").run();
+  } catch(e) {}
 
   dbInstance = db;
   return db;
