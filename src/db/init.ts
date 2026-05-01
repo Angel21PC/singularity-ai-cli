@@ -7,9 +7,12 @@ try {
   console.error('Run: npm run rebuild\n');
 }
 
+let dbInstance: ReturnType<typeof Database> | null = null;
+
 export function initDb() {
-  const db = new Database('singularity.sqlite');
+  if (dbInstance) return dbInstance;
   
+  const db = new Database('singularity.sqlite');
   db.pragma('journal_mode = WAL');
 
   db.exec(`
@@ -41,5 +44,13 @@ export function initDb() {
     );
   `);
 
+  dbInstance = db;
   return db;
+}
+
+export function getDb() {
+  if (!dbInstance) {
+    return initDb();
+  }
+  return dbInstance;
 }
