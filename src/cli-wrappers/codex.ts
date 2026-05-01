@@ -2,7 +2,7 @@ import { execa } from 'execa';
 import { ProviderWrapper } from './base.js';
 import { RateLimitError } from './errors.js';
 
-export class ClaudeCliWrapper extends ProviderWrapper {
+export class CodexCliWrapper extends ProviderWrapper {
   private currentProcess: any | null = null;
   private isPaused: boolean = false;
 
@@ -12,23 +12,17 @@ export class ClaudeCliWrapper extends ProviderWrapper {
     }
 
     try {
-      this.currentProcess = execa('claude', ['-p', prompt, '--permission-mode', 'dontAsk'], {
-        all: true, reject: false
-      });
-
-      const { all } = await this.currentProcess;
-
-      const output = all || '';
+      this.currentProcess = execa('codex', ['exec', prompt], { reject: false });
+      const { stdout, stderr } = await this.currentProcess;
+      const output = stdout || stderr || '';
       
       this.checkRateLimit(output);
 
       return output;
     } catch (error: any) {
       if (error instanceof RateLimitError) throw error;
-      const output = error.all || error.message || '';
-      
+      const output = error.stdout || error.stderr || error.message || '';
       this.checkRateLimit(output);
-      
       throw error;
     } finally {
       this.currentProcess = null;
@@ -50,9 +44,9 @@ export class ClaudeCliWrapper extends ProviderWrapper {
         }
         this.pause();
         throw new RateLimitError(waitMs, `Rate limit reached. Try again at ${hours}:${minutes}`);
-    } else if (output.toLowerCase().includes('rate limit') || output.toLowerCase().includes('limit reached') || output.includes('429')) {
+    } else if (output.toLowerCase().includes('rate limit') || output.toLowerCase().includes('limit reached')) {
         this.pause();
-        throw new RateLimitError(5 * 60 * 1000, 'Rate limit hit. Pausing provider execution.');
+        throw new RateLimitError(5 * 60 * 1000, 'Rate limit detected without specific time.');
     }
   }
 
@@ -61,7 +55,7 @@ export class ClaudeCliWrapper extends ProviderWrapper {
     if (this.currentProcess && typeof this.currentProcess.kill === 'function') {
       this.currentProcess.kill('SIGSTOP');
     }
-    console.log('ClaudeCliWrapper: Paused due to rate limit');
+    console.log('CodexCliWrapper: Paused due to rate limit');
   }
 
   resume(): void {
@@ -69,6 +63,6 @@ export class ClaudeCliWrapper extends ProviderWrapper {
     if (this.currentProcess && typeof this.currentProcess.kill === 'function') {
       this.currentProcess.kill('SIGCONT');
     }
-    console.log('ClaudeCliWrapper: Resumed');
+    console.log('CodexCliWrapper: Resumed');
   }
 }

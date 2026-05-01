@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
 import { executeDb } from '../db/index.js';
-import { execa } from 'execa';
 import fs from 'fs';
 import path from 'path';
+import { ClaudeCliWrapper } from '../cli-wrappers/claude.js';
+import { CodexCliWrapper } from '../cli-wrappers/codex.js';
 
 interface Props {
   projectId: string;
@@ -39,14 +40,12 @@ export const GlobalChat: React.FC<Props> = ({ projectId }) => {
 
   const runAgent = async (agentName: string, prompt: string): Promise<string> => {
     let agentProvider = 'claude-code';
-    let agentModel = 'claude-3-5-sonnet-20241022';
     let systemRole = "You are a helpful Orchestrator. When needed, delegate to other agents by outputting '@AgentName <task>'.";
 
     if (agentName !== 'Orchestrator') {
       const result: any = await executeDb('get', 'SELECT * FROM Agents WHERE (name = ? OR role LIKE ?) AND project_id = ?', [agentName, `%${agentName}%`, projectId]);
       if (result) {
         agentProvider = result.provider;
-        agentModel = result.model;
         systemRole = `You are playing the role: ${result.role}.`;
         setLogs(prev => [...prev, `[System] Delegating task to agent: ${result.name} (${result.provider})`]);
       } else {
@@ -60,12 +59,13 @@ export const GlobalChat: React.FC<Props> = ({ projectId }) => {
     let outputText = '';
     
     if (agentProvider === 'claude-code') {
-        const { stdout, stderr } = await execa('claude', ['-p', fullPrompt, '--permission-mode dontAsk'], { reject: false, input: '' });
-        outputText = stdout || stderr || "No output";
+        const wrapper = new ClaudeCliWrapper();
+        outputText = await wrapper.ask(fullPrompt);
     } else {
-        const { stdout, stderr } = await execa('codex', ['exec', fullPrompt], { reject: false });
-        outputText = stdout || stderr || "No output";
+        const wrapper = new CodexCliWrapper();
+        outputText = await wrapper.ask(fullPrompt);
     }
+
     return outputText;
   };
 
@@ -112,7 +112,13 @@ export const GlobalChat: React.FC<Props> = ({ projectId }) => {
       setLogs(prev => [...prev, `[Agent] ${truncatedFinal}`]);
 
     } catch (err: any) {
-      setLogs(prev => [...prev, `[Error] ${err.message}`]);
+      if (err.name === 'RateLimitError') {
+        const resumeAt = new Date(Date.now() + err.waitMs).toISOString();
+        await executeDb('run', 'INSERT INTO TaskQueue (project_id, task, status, resume_at) VALUES (?, ?, ?, ?)', [projectId, command, 'SLEEPING', resumeAt]).catch(() => {});
+        setLogs(prev => [...prev, `[System] Agent paused. Task queued for later.`]);
+      } else {
+        setLogs(prev => [...prev, `[Error] ${err.message}`]);
+      }
     }
     
     setIsProcessing(false);
