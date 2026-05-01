@@ -3,29 +3,23 @@ import { ProviderWrapper } from './base.js';
 import { RateLimitError } from './errors.js';
 
 export class CodexCliWrapper extends ProviderWrapper {
-  private currentProcess: any | null = null;
-  private isPaused: boolean = false;
-
   async ask(prompt: string): Promise<string> {
-    if (this.isPaused) {
-      throw new Error('Provider is currently paused due to rate limits.');
-    }
+    this.checkPaused();
 
     try {
-      this.currentProcess = execa('codex', ['exec', prompt], { reject: false });
-      const { stdout, stderr } = await this.currentProcess;
+      const process = execa('codex', ['exec', prompt], { reject: false });
+      const { stdout, stderr } = await process;
       const output = stdout || stderr || '';
       
       this.checkRateLimit(output);
 
       return output;
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (error instanceof RateLimitError) throw error;
-      const output = error.stdout || error.stderr || error.message || '';
+      const err = error as { stdout?: string; stderr?: string; message?: string };
+      const output = err.stdout || err.stderr || err.message || '';
       this.checkRateLimit(output);
       throw error;
-    } finally {
-      this.currentProcess = null;
     }
   }
 
@@ -42,27 +36,11 @@ export class CodexCliWrapper extends ProviderWrapper {
         if (waitMs < 0) {
             waitMs += 24 * 60 * 60 * 1000;
         }
-        this.pause();
+        this.pause(waitMs);
         throw new RateLimitError(waitMs, `Rate limit reached. Try again at ${hours}:${minutes}`);
     } else if (output.toLowerCase().includes('rate limit') || output.toLowerCase().includes('limit reached')) {
-        this.pause();
+        this.pause(5 * 60 * 1000);
         throw new RateLimitError(5 * 60 * 1000, 'Rate limit detected without specific time.');
     }
-  }
-
-  pause(): void {
-    this.isPaused = true;
-    if (this.currentProcess && typeof this.currentProcess.kill === 'function') {
-      this.currentProcess.kill('SIGSTOP');
-    }
-    console.log('CodexCliWrapper: Paused due to rate limit');
-  }
-
-  resume(): void {
-    this.isPaused = false;
-    if (this.currentProcess && typeof this.currentProcess.kill === 'function') {
-      this.currentProcess.kill('SIGCONT');
-    }
-    console.log('CodexCliWrapper: Resumed');
   }
 }

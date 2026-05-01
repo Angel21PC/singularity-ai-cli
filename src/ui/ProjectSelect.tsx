@@ -3,6 +3,7 @@ import { Box, Text, useInput } from 'ink';
 import SelectInput from 'ink-select-input';
 import TextInput from 'ink-text-input';
 import { executeDb } from '../db/index.js';
+import crypto from 'crypto';
 
 interface Props {
   onSelectProject: (projectId: string) => void;
@@ -48,7 +49,7 @@ export const ProjectSelect: React.FC<Props> = ({ onSelectProject, onExit }) => {
   };
 
   const handleDescSubmit = async () => {
-    const id = Date.now().toString();
+    const id = crypto.randomUUID();
     try {
       await executeDb(
         'run',

@@ -4,6 +4,7 @@ import TextInput from 'ink-text-input';
 import SelectInput from 'ink-select-input';
 import { executeDb } from '../db/index.js';
 import { execa } from 'execa';
+import crypto from 'crypto';
 
 interface Props {
   projectId: string;
@@ -75,7 +76,7 @@ export const CreateAgentForm: React.FC<Props> = ({ projectId, onDone }) => {
       await executeDb(
         'run',
         'INSERT INTO Agents (id, project_id, name, role, provider, model) VALUES (?, ?, ?, ?, ?, ?)',
-        [Date.now().toString(), projectId, name, role, provider, item.value]
+        [crypto.randomUUID(), projectId, name, role, provider, item.value]
       );
     } catch (err) {
       console.error(err);

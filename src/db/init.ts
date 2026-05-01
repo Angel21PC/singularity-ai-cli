@@ -35,14 +35,34 @@ export function initDb() {
 
     CREATE TABLE IF NOT EXISTS TaskQueue (
       id TEXT PRIMARY KEY,
+      project_id TEXT,
       agent_id TEXT,
+      prompt TEXT,
       status TEXT NOT NULL,
       resume_at DATETIME,
-      context_dump_path TEXT,
-      pid INTEGER,
-      FOREIGN KEY(agent_id) REFERENCES Agents(id)
+      result TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(agent_id) REFERENCES Agents(id),
+      FOREIGN KEY(project_id) REFERENCES Projects(id)
     );
+    
+    CREATE INDEX IF NOT EXISTS idx_taskqueue_project_id ON TaskQueue(project_id);
+    CREATE INDEX IF NOT EXISTS idx_taskqueue_status ON TaskQueue(status);
+    CREATE INDEX IF NOT EXISTS idx_taskqueue_resume_at ON TaskQueue(resume_at);
   `);
+
+  // Lightweight migrations for existing DBs
+  try {
+    const cols = (db.prepare('PRAGMA table_info(TaskQueue)').all() as any[]).map(c => c.name);
+    if (!cols.includes('project_id')) db.exec('ALTER TABLE TaskQueue ADD COLUMN project_id TEXT');
+    if (!cols.includes('prompt')) db.exec('ALTER TABLE TaskQueue ADD COLUMN prompt TEXT');
+    if (!cols.includes('result')) db.exec('ALTER TABLE TaskQueue ADD COLUMN result TEXT');
+    if (!cols.includes('created_at')) db.exec('ALTER TABLE TaskQueue ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP');
+    if (!cols.includes('updated_at')) db.exec('ALTER TABLE TaskQueue ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP');
+  } catch (e) {
+    // non-fatal
+  }
 
   dbInstance = db;
   return db;
