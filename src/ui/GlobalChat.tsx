@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
 import { executeDb } from '../db/index.js';
@@ -8,6 +8,22 @@ export const GlobalChat: React.FC = () => {
   const [input, setInput] = useState('');
   const [logs, setLogs] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [availableAgents, setAvailableAgents] = useState<any[]>([]);
+
+  useEffect(() => {
+    executeDb('all', 'SELECT * FROM Agents')
+      .then((data: any) => setAvailableAgents(data || []))
+      .catch(console.error);
+  }, []);
+
+  const hintMatch = input.match(/@([a-zA-Z0-9_-]*)$/);
+  let hints: string[] = [];
+  if (hintMatch) {
+    const partial = hintMatch[1].toLowerCase();
+    hints = availableAgents
+      .filter((a: any) => a.name.toLowerCase().includes(partial) || a.role.toLowerCase().includes(partial) || a.name.replace(/\s+/g, '').toLowerCase().includes(partial))
+      .map((a: any) => `@${a.name.replace(/\s+/g, '')} (${a.provider})`);
+  }
 
   const handleSubmit = async () => {
     if (!input.trim() || isProcessing) return;
@@ -83,14 +99,21 @@ export const GlobalChat: React.FC = () => {
         ))}
       </Box>
 
-      <Box>
-        <Text color="blue">{isProcessing ? "⏳ Processing... " : "❯ "}</Text>
-        <TextInput
-          value={input}
-          onChange={setInput}
-          onSubmit={handleSubmit}
-          placeholder="Enter command..."
-        />
+      <Box flexDirection="column">
+        <Box>
+          <Text color="blue">{isProcessing ? "⏳ Processing... " : "❯ "}</Text>
+          <TextInput
+            value={input}
+            onChange={setInput}
+            onSubmit={handleSubmit}
+            placeholder="Enter command..."
+          />
+        </Box>
+        {hints.length > 0 && (
+          <Box marginTop={1}>
+            <Text color="cyan">Agents: {hints.join(', ')}</Text>
+          </Box>
+        )}
       </Box>
     </Box>
   );
