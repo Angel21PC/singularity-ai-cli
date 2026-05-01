@@ -1,4 +1,13 @@
-import Database from 'better-sqlite3';
+import Database from 'better-sqlite3'
+
+try {
+  require('better-sqlite3')
+} catch (e) {
+  console.error('
+⚠️  CRITICAL: better-sqlite3 needs to be rebuilt for your OS.')
+  console.error('Run: npm run rebuild
+')
+};
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
