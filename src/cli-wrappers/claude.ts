@@ -17,7 +17,7 @@ export class ClaudeCliWrapper extends ProviderWrapper {
         all: true,
         reject: false,
         timeout: 5 * 60 * 1000, // 5 minutes
-        signal: controller.signal
+        cancelSignal: controller.signal
       });
 
       const { all } = await process;
