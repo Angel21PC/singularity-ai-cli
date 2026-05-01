@@ -13,6 +13,7 @@ export type OrchestratorEventType =
 export interface OrchestratorEvent {
   type: OrchestratorEventType;
   projectId: string;
+  taskId?: string;
   payload: any;
 }
 
@@ -25,6 +26,10 @@ class OrchestratorEventBus extends EventEmitter {
 
   onEvent(listener: (event: OrchestratorEvent) => void) {
     this.on('event', listener);
+  }
+
+  offEvent(listener: (event: OrchestratorEvent) => void) {
+    this.off('event', listener);
   }
 }
 

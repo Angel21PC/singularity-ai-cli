@@ -46,6 +46,12 @@ export function initDb() {
       FOREIGN KEY(agent_id) REFERENCES Agents(id),
       FOREIGN KEY(project_id) REFERENCES Projects(id)
     );
+
+    CREATE TABLE IF NOT EXISTS ProviderState (
+      provider_name TEXT PRIMARY KEY,
+      paused_until DATETIME
+    );
+
     
     CREATE INDEX IF NOT EXISTS idx_taskqueue_project_id ON TaskQueue(project_id);
     CREATE INDEX IF NOT EXISTS idx_taskqueue_status ON TaskQueue(status);

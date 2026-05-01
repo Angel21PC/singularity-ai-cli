@@ -8,11 +8,11 @@ import { logger } from './Logger.js';
 import crypto from 'crypto';
 
 export class Orchestrator {
-  static async runAgent(projectId: string, agentName: string, prompt: string): Promise<string> {
+  static async runAgent(projectId: string, agentName: string, prompt: string, rootTaskId?: string): Promise<string> {
     const taskId = crypto.randomUUID();
     let agentProvider = 'claude-code';
     let agentId = 'orchestrator';
-    let systemRole = "You are a helpful Orchestrator. When needed, delegate to other agents by outputting '>>>DELEGATE @AgentName<<<\\n<task>'.";
+    let systemRole = "You are a helpful Orchestrator. When needed, delegate to other agents by outputting '>>>DELEGATE @AgentName<<<\n<task>'.";
 
     if (agentName !== 'Orchestrator') {
       const result = AgentRepository.getAgentByNameOrRole(agentName, projectId);
@@ -20,9 +20,9 @@ export class Orchestrator {
         agentProvider = result.provider;
         agentId = result.id;
         systemRole = `You are playing the role: ${result.role}.`;
-        eventBus.emitEvent({ type: 'SystemLog', projectId, payload: `Delegating task to agent: ${result.name} (${result.provider})` });
+        eventBus.emitEvent({ type: 'SystemLog', projectId, taskId: rootTaskId, payload: `Delegating task to agent: ${result.name} (${result.provider})` });
       } else {
-        eventBus.emitEvent({ type: 'SystemLog', projectId, payload: `Warning: Agent '${agentName}' not found in this project. Executing task directly.` });
+        eventBus.emitEvent({ type: 'SystemLog', projectId, taskId: rootTaskId, payload: `Warning: Agent '${agentName}' not found in this project. Executing task directly.` });
       }
     }
 
@@ -56,38 +56,38 @@ export class Orchestrator {
     }
   }
 
-  static async handlePrompt(projectId: string, input: string): Promise<void> {
+  static async handlePrompt(projectId: string, input: string, rootTaskId: string): Promise<void> {
     try {
-      eventBus.emitEvent({ type: 'OrchestratorThinking', projectId, payload: 'Analyzing request...' });
+      eventBus.emitEvent({ type: 'OrchestratorThinking', projectId, taskId: rootTaskId, payload: 'Analyzing request...' });
       
-      const orchOutput = await this.runAgent(projectId, 'Orchestrator', input);
+      const orchOutput = await this.runAgent(projectId, 'Orchestrator', input, rootTaskId);
       let finalOutput = orchOutput;
 
       const delegationMatch = parseDelegation(orchOutput);
       if (delegationMatch) {
          const { subAgentName, subTask } = delegationMatch;
          
-         eventBus.emitEvent({ type: 'Delegating', projectId, payload: `Delegating to @${subAgentName}...` });
-         const subOutput = await this.runAgent(projectId, subAgentName, subTask);
+         eventBus.emitEvent({ type: 'Delegating', projectId, taskId: rootTaskId, payload: `Delegating to @${subAgentName}...` });
+         const subOutput = await this.runAgent(projectId, subAgentName, subTask, rootTaskId);
          
          MemoryStore.updateHandoff(projectId, subAgentName, subTask, subOutput);
          
-         eventBus.emitEvent({ type: 'OrchestratorThinking', projectId, payload: 'Analyzing subagent result...' });
+         eventBus.emitEvent({ type: 'OrchestratorThinking', projectId, taskId: rootTaskId, payload: 'Analyzing subagent result...' });
          const dumpDir = MemoryStore.getWorkspaceDir(projectId);
          const dumpPath = `${dumpDir}/latest_handoff.txt`;
-         const feedbackPrompt = `The subagent @${subAgentName} executed your delegation. Its full output is saved at ${dumpPath}.\nHere is a snippet: ${subOutput.substring(0, 500)}\n\nPlease provide the final response to the user based on this result.`;
+         const feedbackPrompt = `The subagent @${subAgentName} executed your delegation. Its full output is saved at ${dumpPath}.\nHere is a snippet: ${subOutput.substring(0, 8000)}\n\nPlease provide the final response to the user based on this result.`;
          
-         finalOutput = await this.runAgent(projectId, 'Orchestrator', feedbackPrompt);
+         finalOutput = await this.runAgent(projectId, 'Orchestrator', feedbackPrompt, rootTaskId);
       }
 
-      eventBus.emitEvent({ type: 'TaskCompleted', projectId, payload: finalOutput });
+      eventBus.emitEvent({ type: 'TaskCompleted', projectId, taskId: rootTaskId, payload: finalOutput });
 
     } catch (err: any) {
       logger.error({ err, projectId }, 'Task failed');
       if (err.name === 'RateLimitError') {
-        eventBus.emitEvent({ type: 'RateLimited', projectId, payload: 'Agent paused. Task queued for later.' });
+        eventBus.emitEvent({ type: 'RateLimited', projectId, taskId: rootTaskId, payload: 'Agent paused. Task queued for later.' });
       } else {
-        eventBus.emitEvent({ type: 'TaskFailed', projectId, payload: err.message });
+        eventBus.emitEvent({ type: 'TaskFailed', projectId, taskId: rootTaskId, payload: err.message });
       }
     }
   }

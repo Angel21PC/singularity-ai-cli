@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
 import { AgentService } from '../services/AgentService.js';
 import { Orchestrator } from '../core/Orchestrator.js';
 import { eventBus, OrchestratorEvent } from '../core/EventBus.js';
+import crypto from 'crypto';
 
 interface Props {
   projectId: string;
@@ -14,6 +15,7 @@ export const GlobalChat: React.FC<Props> = ({ projectId }) => {
   const [logs, setLogs] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [availableAgents, setAvailableAgents] = useState<any[]>([]);
+  const currentTaskIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     try {
@@ -24,6 +26,7 @@ export const GlobalChat: React.FC<Props> = ({ projectId }) => {
 
     const handleEvent = (event: OrchestratorEvent) => {
       if (event.projectId !== projectId) return;
+      if (event.taskId && currentTaskIdRef.current && event.taskId !== currentTaskIdRef.current) return;
 
       if (event.type === 'SystemLog') {
         setLogs(prev => [...prev, `[System] ${event.payload}`]);
@@ -47,8 +50,9 @@ export const GlobalChat: React.FC<Props> = ({ projectId }) => {
 
     eventBus.onEvent(handleEvent);
     
-    // Removing event listener in cleanup is tricky with `on` if we use an anonymous arrow.
-    // In node's EventEmitter we could do `removeListener`, but we'll leave it simple.
+    return () => {
+      eventBus.offEvent(handleEvent);
+    };
   }, [projectId]);
 
   const hintMatch = input.match(/@([a-zA-Z0-9_-]*)$/);
@@ -64,12 +68,14 @@ export const GlobalChat: React.FC<Props> = ({ projectId }) => {
     if (!input.trim() || isProcessing) return;
     
     const command = input;
+    const newTaskId = crypto.randomUUID();
+    currentTaskIdRef.current = newTaskId;
     setInput('');
     setLogs(prev => [...prev, `> ${command}`]);
     setIsProcessing(true);
 
     // Call orchestrator asynchronously and don't await, let the event bus handle responses
-    Orchestrator.handlePrompt(projectId, command).catch(console.error);
+    Orchestrator.handlePrompt(projectId, command, newTaskId).catch(console.error);
   };
 
   return (

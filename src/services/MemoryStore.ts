@@ -14,7 +14,7 @@ export class MemoryStore {
     const dumpPath = path.join(this.getWorkspaceDir(projectId), 'latest_handoff.txt');
     if (fs.existsSync(dumpPath)) {
       const content = fs.readFileSync(dumpPath, 'utf8');
-      return `\nPrevious Handoff Context:\n${content.substring(0, 1000)}\n`;
+      return `\nPrevious Handoff Context:\n${content.substring(0, 16000)}\n`;
     }
     return '';
   }
