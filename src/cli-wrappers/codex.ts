@@ -17,7 +17,7 @@ export class CodexCliWrapper extends ProviderWrapper {
         all: true,
         reject: false,
         timeout: 5 * 60 * 1000,
-        cancelSignal: controller.signal
+        signal: controller.signal
       });
 
       const { all } = await process;
