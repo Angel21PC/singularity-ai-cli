@@ -7,7 +7,8 @@ async function testClaude() {
   console.log(`Prompt: "${prompt}"`);
 
   try {
-    const { stdout, stderr, exitCode } = await execa('claude', [prompt], {
+    const { stdout, stderr, exitCode } = await execa('claude', ['-p', prompt], {
+      input: '',
       reject: false
     });
 
