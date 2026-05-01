@@ -73,7 +73,8 @@ async function main() {
       }
     });
 
-    Orchestrator.handlePrompt(projectId, prompt).catch((err) => {
+    const crypto = require('crypto');
+    Orchestrator.handlePrompt(projectId, prompt, crypto.randomUUID()).catch((err) => {
       console.error(err);
       process.exit(1);
     });
