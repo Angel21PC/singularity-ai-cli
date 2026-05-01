@@ -11,22 +11,22 @@ By operating as an invisible "puppeteer" over your existing CLIs, Singularity ma
 ### 1. Project Isolation & Workspace Mapping
 Create distinct projects (e.g., "Rick and Morty React App" vs. "Enterprise CRM"). Agents and memory are strictly isolated per project, preventing context leakage.
 
-![Project Selection](https://via.placeholder.com/800x400.png?text=Project+Selection+TUI)
+<!-- TODO: Add actual screenshot of the project selection menu -->
 
 ### 2. Specialized Agent Staffing
 Define your team of agents per project. Create a `Master_Orchestrator`, a `UX_Designer` using Claude 3.5 Sonnet, and a `Frontend_React` expert using Codex.
 
-![Agent Management](https://via.placeholder.com/800x400.png?text=Agent+Creation+%26+Management)
+<!-- TODO: Add actual screenshot of the agent creation menu -->
 
 ### 3. Asynchronous "Handoff" Context Memory
 When the UX Designer finishes a color palette, Singularity writes the output to physical disk (`memory_dumps/`). When the Frontend agent wakes up, this file is automatically injected as prefix context, ensuring flawless continuity between agents even across PC reboots.
 
-![Memory Dumps](https://via.placeholder.com/800x400.png?text=Persistent+Memory+Dumps)
+<!-- TODO: Add actual screenshot of memory dumps folder -->
 
 ### 4. Live Global Chat & Autonomous Delegation Loop
 You talk only to the Orchestrator. The Orchestrator automatically delegates tasks using `@AgentName`. The TUI truncates massive code outputs to keep the console clean while saving the full code to disk.
 
-![Global Chat Delegation](https://via.placeholder.com/800x400.png?text=Global+Chat+%26+Live+Delegation+Queue)
+<!-- TODO: Add actual screenshot of the Global Chat orchestration in action -->
 
 ### 5. Rate Limit Resilience (Burn Limits)
 If an agent hits a flat-rate limit (e.g., "Try again at 14:00"), the system pauses the specific agent, saves its state to SQLite, and uses background Cron/Worker threads to automatically wake it up at the exact time to resume work.
