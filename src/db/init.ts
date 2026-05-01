@@ -1,18 +1,14 @@
 import Database from 'better-sqlite3';
-
-try {
-  require('better-sqlite3');
-} catch (e) {
-  console.error('\n⚠️  CRITICAL: better-sqlite3 needs to be rebuilt for your OS.');
-  console.error('Run: npm run rebuild\n');
-}
+import path from 'path';
 
 let dbInstance: ReturnType<typeof Database> | null = null;
 
 export function initDb() {
   if (dbInstance) return dbInstance;
-  
-  const db = new Database('singularity.sqlite');
+
+  // DB lives alongside wherever the process is running (CWD = project workspace)
+  const dbPath = path.resolve(process.cwd(), 'singularity.sqlite');
+  const db = new Database(dbPath);
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
 
@@ -69,10 +65,8 @@ export function initDb() {
     // non-fatal
   }
 
-  // Insert dummy orchestrator agent to satisfy logic if needed
-  try {
-      db.prepare("INSERT OR IGNORE INTO Agents (id, project_id, name, role, provider, model) VALUES ('orchestrator', 'global', 'Orchestrator', 'System', 'codex', 'gpt-4o')").run();
-  } catch(e) {}
+  // Orchestrator is a virtual agent with no project scope; project_id is nullable
+  db.prepare("INSERT OR IGNORE INTO Agents (id, project_id, name, role, provider, model) VALUES ('orchestrator', NULL, 'Orchestrator', 'System', 'claude-code', 'claude-opus-4-5')").run();
 
   dbInstance = db;
   return db;

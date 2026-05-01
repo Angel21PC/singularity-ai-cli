@@ -14,14 +14,19 @@ export class ClaudeCliWrapper extends ProviderWrapper {
 
     try {
       const process = execa('claude', ['-p', prompt, '--permission-mode', 'dontAsk'], {
-        all: true,
+        input: '',       // prevent "no stdin data received" warning
+        stdout: 'pipe',
+        stderr: 'pipe',
         reject: false,
         timeout: 5 * 60 * 1000,
         cancelSignal: controller.signal
       });
 
-      const { all } = await process;
-      const output = all || '';
+      const { stdout, stderr } = await process;
+      // Check stderr for rate limit signals, use stdout as the actual response
+      const output = stdout || '';
+      const errText = stderr || '';
+      this.handleRateLimitOrThrow(errText);
 
       this.handleRateLimitOrThrow(output);
       return output;
